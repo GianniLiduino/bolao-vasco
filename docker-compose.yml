@@ -1,0 +1,15 @@
+services:
+  bolao:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATA_DIR: /app/data
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Defina ADMIN_PASSWORD com pelo menos 12 caracteres}
+    expose:
+      - "3000"
+    volumes:
+      - bolao_data:/app/data
+volumes:
+  bolao_data:
