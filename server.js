@@ -6,7 +6,7 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 export const norm = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const winner = (v, f) => v > f ? 'Vasco' : v < f ? 'Flamengo' : 'Empate';
+const winner = (v, p) => v > p ? 'Vasco' : v < p ? 'Palmeiras' : 'Empate';
 const initial = () => ({ palpites: [], premio: 'Prêmio a definir', prazo: '', fechado: false, resultado: null });
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const text = (value, max, required = false) => {
@@ -19,7 +19,7 @@ const score = value => {
 };
 export function points(p, r) {
   if (!r) return 0;
-  return (p.v === r.v && p.f === r.f ? 10 : 0) + (p.w === winner(r.v, r.f) ? 5 : 0) + (p.gol && r.gols.includes(norm(p.gol)) ? 3 : 0);
+  return (p.v === r.v && p.p === r.p ? 10 : 0) + (p.w === winner(r.v, r.p) ? 5 : 0) + (p.gol && r.gols.includes(norm(p.gol)) ? 3 : 0);
 }
 export async function createApp({ dataDir = process.env.DATA_DIR || path.join(root, 'data'), password = process.env.ADMIN_PASSWORD, secureCookie = process.env.NODE_ENV === 'production' } = {}) {
   if (!password || password.length < 12) throw new Error('Defina ADMIN_PASSWORD com pelo menos 12 caracteres.');
@@ -28,15 +28,15 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
   let db;
   try {
     db = JSON.parse(await readFile(dbFile, 'utf8'));
-    if (!db || !Array.isArray(db.palpites) || typeof db.premio !== 'string' || typeof db.prazo !== 'string' || typeof db.fechado !== 'boolean' || !(db.resultado === null || (Number.isInteger(db.resultado?.v) && Number.isInteger(db.resultado?.f) && Array.isArray(db.resultado?.gols)))) throw new Error('Estrutura de dados inválida');
+    if (!db || !Array.isArray(db.palpites) || typeof db.premio !== 'string' || typeof db.prazo !== 'string' || typeof db.fechado !== 'boolean' || !(db.resultado === null || (Number.isInteger(db.resultado?.v) && Number.isInteger(db.resultado?.p) && Array.isArray(db.resultado?.gols)))) throw new Error('Estrutura de dados inválida');
     if (db.prazo && !Number.isFinite(Date.parse(db.prazo))) throw new Error('Prazo inválido');
     const names = new Set();
     for (const p of db.palpites) {
-      text(p.nome, 70, true); text(p.gol, 80); score(p.v); score(p.f);
-      if (p.w !== winner(p.v, p.f) || !Number.isFinite(p.at) || names.has(norm(p.nome))) throw new Error('Palpite inválido');
+      text(p.nome, 70, true); text(p.gol, 80); score(p.v); score(p.p);
+      if (p.w !== winner(p.v, p.p) || !Number.isFinite(p.at) || names.has(norm(p.nome))) throw new Error('Palpite inválido');
       names.add(norm(p.nome));
     }
-    if (db.resultado) { score(db.resultado.v); score(db.resultado.f); db.resultado.gols.forEach(gol => text(gol, 1000)); }
+    if (db.resultado) { score(db.resultado.v); score(db.resultado.p); db.resultado.gols.forEach(gol => text(gol, 1000)); }
     // Aceita somente campos da aplicação, mesmo ao restaurar um arquivo externo.
     db = Object.fromEntries(Object.keys(initial()).map(key => [key, db[key]]));
   } catch (error) {
@@ -67,7 +67,7 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
   const passwordHash = createHash('sha256').update(password).digest();
   const closed = state => state.fechado || !!state.resultado || !!(state.prazo && Date.now() >= Date.parse(state.prazo));
   function publicState() {
-    const ranked = [...db.palpites].sort((a, b) => points(b, db.resultado) - points(a, db.resultado) || Number(b.v === db.resultado?.v && b.f === db.resultado?.f) - Number(a.v === db.resultado?.v && a.f === db.resultado?.f) || a.at - b.at);
+    const ranked = [...db.palpites].sort((a, b) => points(b, db.resultado) - points(a, db.resultado) || Number(b.v === db.resultado?.v && b.p === db.resultado?.p) - Number(a.v === db.resultado?.v && a.p === db.resultado?.p) || a.at - b.at);
     return { ...db, encerrado: closed(db), ranking: ranked.map(p => ({ ...p, pontos: points(p, db.resultado) })) };
   }
   const server = http.createServer(async (req, res) => {
@@ -123,12 +123,12 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
       }
       if (route === '/api/palpites') {
         const nome = text(body.nome, 70, true), gol = text(body.gol ?? '', 80);
-        const v = score(body.v), f = score(body.f), w = winner(v, f);
+        const v = score(body.v), p = score(body.p), w = winner(v, p);
         if (body.w !== w) throw fail(400, 'O vencedor escolhido não corresponde ao placar.');
         await mutate(state => {
           if (closed(state)) throw fail(409, 'Palpites encerrados.');
           if (state.palpites.some(p => norm(p.nome) === norm(nome))) throw fail(409, 'Este nome já registrou um palpite.');
-          state.palpites.push({ nome, v, f, w, gol, at: Date.now() });
+          state.palpites.push({ nome, v, p, w, gol, at: Date.now() });
         });
         return send(201, publicState());
       }
@@ -140,9 +140,9 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
         if (typeof body.fechado !== 'boolean') throw fail(400, 'Configuração inválida.');
         await mutate(state => Object.assign(state, { premio, prazo, fechado: body.fechado }));
       } else if (route === '/api/resultado') {
-        const v = score(body.v), f = score(body.f);
+        const v = score(body.v), p = score(body.p);
         const gols = text(body.goleadores ?? '', 1000).split(',').map(norm).filter(Boolean);
-        await mutate(state => { state.resultado = { v, f, gols }; state.fechado = true; });
+        await mutate(state => { state.resultado = { v, p, gols }; state.fechado = true; });
       } else if (route === '/api/reset') {
         await mutate(state => Object.assign(state, initial()));
       } else if (route === '/api/logout') {

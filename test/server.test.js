@@ -16,7 +16,7 @@ async function listen(dataDir) {
   }
   return { request, close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())) };
 }
-const guess = (nome, extra = {}) => ({ nome, v: 2, f: 1, w: 'Vasco', gol: 'João', ...extra });
+const guess = (nome, extra = {}) => ({ nome, v: 2, p: 1, w: 'Vasco', gol: 'João', ...extra });
 
 test('persistência, concorrência, autenticação, regras e reinício do servidor', async t => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'bolao-test-'));
@@ -53,7 +53,7 @@ test('persistência, concorrência, autenticação, regras e reinício do servid
   assert.equal((await call('/api/palpites', guess('Fechado'))).status, 409);
   await call('/api/config', { premio: 'Camisa', prazo: '', fechado: false }, cookie);
   assert.equal((await call('/api/palpites', guess('Outro', { v: 3, gol: '' }))).status, 201);
-  const result = await call('/api/resultado', { v: 2, f: 1, goleadores: 'JOAO' }, cookie);
+  const result = await call('/api/resultado', { v: 2, p: 1, goleadores: 'JOAO' }, cookie);
   assert.equal(result.body.ranking[0].nome, 'José');
   assert.equal(result.body.ranking[0].pontos, 18);
   assert.equal(result.body.ranking.at(-1).pontos, 5);
@@ -86,9 +86,9 @@ test('arquivo inválido não é sobrescrito', async () => {
 
 test('pontuação cumulativa e empate', () => {
   assert.equal(points(guess('A'), null), 0);
-  assert.equal(points(guess('A'), { v: 2, f: 1, gols: ['joao'] }), 18);
-  assert.equal(points(guess('A', { v: 1, f: 1, w: 'Empate', gol: '' }), { v: 1, f: 1, gols: [] }), 15);
-  assert.equal(points(guess('A', { w: 'Flamengo', v: 0, f: 1 }), { v: 2, f: 1, gols: [] }), 0);
+  assert.equal(points(guess('A'), { v: 2, p: 1, gols: ['joao'] }), 18);
+  assert.equal(points(guess('A', { v: 1, p: 1, w: 'Empate', gol: '' }), { v: 1, p: 1, gols: [] }), 15);
+  assert.equal(points(guess('A', { w: 'Palmeiras', v: 0, p: 1 }), { v: 2, p: 1, gols: [] }), 0);
 });
 
 test('senha obrigatória e limite de tentativas', async t => {

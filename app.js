@@ -6,10 +6,10 @@ function tab(t) {
   ['palpites', 'ranking', 'admin'].forEach(x => $(x).classList.toggle('hide', x !== t));
   refresh();
 }
-for (let i = 0; i <= 15; i++) ['vg', 'fg', 'rv', 'rf'].forEach(id => $(id).add(new Option(i, i)));
+for (let i = 0; i <= 15; i++) ['vg', 'pg', 'rv', 'rp'].forEach(id => $(id).add(new Option(i, i)));
 function resetGuess() {
   $('form').reset();
-  $('vg').value = '1'; $('fg').value = '1'; $('vencedor').value = 'Empate';
+  $('vg').value = '1'; $('pg').value = '1'; $('vencedor').value = 'Empate';
 }
 resetGuess();
 async function api(route, data) {
@@ -27,11 +27,11 @@ function render() {
   $('form').querySelector('button').disabled = db.encerrado || busy;
   $('lista').replaceChildren(...db.ranking.map((p, i) => {
     const tr = document.createElement('tr');
-    [i + 1, p.nome, p.pontos, `${p.v} × ${p.f}`].forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
+    [i + 1, p.nome, p.pontos, `${p.v} × ${p.p}`].forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
     return tr;
   }));
   if (!db.ranking.length) $('lista').innerHTML = '<tr><td colspan="4">Ainda não há palpites.</td></tr>';
-  $('oficial').textContent = db.resultado ? `Resultado oficial: Vasco ${db.resultado.v} × ${db.resultado.f} Flamengo` : 'Aguardando resultado oficial.';
+  $('oficial').textContent = db.resultado ? `Resultado oficial: Vasco ${db.resultado.v} × ${db.resultado.p} Palmeiras` : 'Aguardando resultado oficial.';
 }
 async function refresh() {
   try { db = await api('state'); render(); $('connection').textContent = ''; }
@@ -48,7 +48,7 @@ async function action(fn) {
 $('form').onsubmit = e => {
   e.preventDefault();
   action(async () => {
-    db = await api('palpites', { nome: $('nome').value.trim(), v: +$('vg').value, f: +$('fg').value, w: $('vencedor').value, gol: $('artilheiro').value.trim() });
+    db = await api('palpites', { nome: $('nome').value.trim(), v: +$('vg').value, p: +$('pg').value, w: $('vencedor').value, gol: $('artilheiro').value.trim() });
     $('msg').textContent = 'Palpite salvo! Todos os participantes já podem vê-lo.';
     resetGuess();
   });
@@ -65,7 +65,7 @@ function entrar() {
     $('prazo').value = date ? new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
     $('fechado').checked = db.fechado;
     $('rv').value = db.resultado?.v ?? 0;
-    $('rf').value = db.resultado?.f ?? 0;
+    $('rp').value = db.resultado?.p ?? 0;
     $('goleadores').value = db.resultado?.gols.join(', ') ?? '';
   });
 }
@@ -78,12 +78,12 @@ function configurar() {
 }
 function resultado() {
   if (!auth) return;
-  action(async () => { db = await api('resultado', { v: +$('rv').value, f: +$('rf').value, goleadores: $('goleadores').value }); $('fechado').checked = true; alert('Resultado publicado e palpites encerrados!'); });
+  action(async () => { db = await api('resultado', { v: +$('rv').value, p: +$('rp').value, goleadores: $('goleadores').value }); $('fechado').checked = true; alert('Resultado publicado e palpites encerrados!'); });
 }
 function exportar() { if (auth) window.location.assign('/api/export'); }
 function limpar() {
   if (!auth || !confirm('Apagar TODOS os palpites, resultado e configurações? Exporte um backup antes de continuar.')) return;
-  action(async () => { db = await api('reset', {}); $('premio').value = db.premio; $('prazo').value = ''; $('fechado').checked = false; $('rv').value = '0'; $('rf').value = '0'; $('goleadores').value = ''; $('msg').textContent = ''; });
+  action(async () => { db = await api('reset', {}); $('premio').value = db.premio; $('prazo').value = ''; $('fechado').checked = false; $('rv').value = '0'; $('rp').value = '0'; $('goleadores').value = ''; $('msg').textContent = ''; });
 }
 function sair() { action(async () => { await api('logout', {}); auth = false; $('controls').classList.add('hide'); }); }
 refresh();
