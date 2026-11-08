@@ -28,6 +28,25 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
   let db;
   try {
     db = JSON.parse(await readFile(dbFile, 'utf8'));
+    if (db && typeof db === 'object') {
+      if (db.resultado && typeof db.resultado === 'object') {
+        if (db.resultado.p === undefined && db.resultado.f !== undefined) {
+          db.resultado.p = db.resultado.f;
+          delete db.resultado.f;
+        }
+      }
+      if (Array.isArray(db.palpites)) {
+        for (const p of db.palpites) {
+          if (p && typeof p === 'object') {
+            if (p.p === undefined && p.f !== undefined) {
+              p.p = p.f;
+              delete p.f;
+            }
+            if (p.w === 'Flamengo') p.w = 'Palmeiras';
+          }
+        }
+      }
+    }
     if (!db || !Array.isArray(db.palpites) || typeof db.premio !== 'string' || typeof db.prazo !== 'string' || typeof db.fechado !== 'boolean' || !(db.resultado === null || (Number.isInteger(db.resultado?.v) && Number.isInteger(db.resultado?.p) && Array.isArray(db.resultado?.gols)))) throw new Error('Estrutura de dados inválida');
     if (db.prazo && !Number.isFinite(Date.parse(db.prazo))) throw new Error('Prazo inválido');
     const names = new Set();
@@ -39,6 +58,7 @@ export async function createApp({ dataDir = process.env.DATA_DIR || path.join(ro
     if (db.resultado) { score(db.resultado.v); score(db.resultado.p); db.resultado.gols.forEach(gol => text(gol, 1000)); }
     // Aceita somente campos da aplicação, mesmo ao restaurar um arquivo externo.
     db = Object.fromEntries(Object.keys(initial()).map(key => [key, db[key]]));
+    await persist(db);
   } catch (error) {
     if (error.code !== 'ENOENT') throw new Error(`Não foi possível ler ${dbFile}. Restaure um backup válido.`, { cause: error });
     db = initial();

@@ -75,6 +75,33 @@ test('persistência, concorrência, autenticação, regras e reinício do servid
   assert.equal(JSON.parse(await readFile(path.join(dataDir, 'bolao.json'), 'utf8')).resultado, null);
 });
 
+test('migração automática de dados legados do Flamengo para Palmeiras', async () => {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'bolao-legacy-'));
+  const legacyData = {
+    palpites: [{ nome: 'Torcedor', v: 1, f: 2, w: 'Flamengo', gol: 'Jogador', at: Date.now() }],
+    premio: 'R$ 100',
+    prazo: '',
+    fechado: false,
+    resultado: { v: 1, f: 2, gols: ['jogador'] }
+  };
+  await writeFile(path.join(dataDir, 'bolao.json'), JSON.stringify(legacyData));
+  const app = await listen(dataDir);
+  try {
+    const res = await app.request('/api/state');
+    assert.equal(res.body.palpites[0].p, 2);
+    assert.equal(res.body.palpites[0].w, 'Palmeiras');
+    assert.equal(res.body.resultado.p, 2);
+    const updated = JSON.parse(await readFile(path.join(dataDir, 'bolao.json'), 'utf8'));
+    assert.equal(updated.palpites[0].p, 2);
+    assert.equal(updated.palpites[0].f, undefined);
+    assert.equal(updated.resultado.p, 2);
+    assert.equal(updated.resultado.f, undefined);
+  } finally {
+    await app.close();
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('arquivo inválido não é sobrescrito', async () => {
   const dataDir = await mkdtemp(path.join(os.tmpdir(), 'bolao-corrupt-'));
   try {
